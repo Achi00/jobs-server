@@ -5,6 +5,7 @@ const express = require("express");
 const passportSetup = require("./config/passport-config");
 const passport = require("passport");
 const authRoutes = require("./routes/authRoute");
+const userRoutes = require("./routes/userRoutes");
 const session = require("express-session");
 
 const app = express();
@@ -34,10 +35,13 @@ app.use(
 app.use(passport.initialize());
 app.use(passport.session());
 
-app.use("/auth", authRoutes);
 app.get("/", (req, res) => {
   res.send("hello world");
 });
+
+app.use("/auth", authRoutes);
+app.use("/user", userRoutes);
+
 app.get("/api/session", (req, res) => {
   console.log("Session data:", req.session);
   if (req.user) {
