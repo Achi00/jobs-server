@@ -1,15 +1,8 @@
 const express = require("express");
-const User = require("../models/User"); // Adjust the path as necessary
+const User = require("../models/User");
+const { authenticateUser } = require("../utils");
 
 const router = express.Router();
-
-// Middleware to protect routes
-const authenticateUser = (req, res, next) => {
-  if (req.isAuthenticated()) {
-    return next();
-  }
-  res.status(401).send("Unauthorized");
-};
 
 // Get user profile
 router.get("/profile", authenticateUser, async (req, res) => {

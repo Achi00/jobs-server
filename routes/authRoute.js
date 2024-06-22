@@ -12,8 +12,24 @@ router.get(
 router.get(
   "/google/callback",
   passport.authenticate("google", { failureRedirect: "/" }),
-  (req, res) => {
-    res.redirect("http://localhost:3000/profile");
+  async (req, res) => {
+    try {
+      const user = await User.findById(req.user.id);
+      console.log(user);
+      if (
+        !user.skills ||
+        user.skills.length === 0 ||
+        !user.experience ||
+        user.experience.length === 0
+      ) {
+        res.redirect("http://localhost:3000/profile");
+      } else {
+        res.redirect("http://localhost:3000/");
+      }
+    } catch (error) {
+      console.error("Error checking user profile data", error);
+      res.redirect("http://localhost:3000/");
+    }
   }
 );
 

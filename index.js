@@ -6,6 +6,7 @@ const passportSetup = require("./config/passport-config");
 const passport = require("passport");
 const authRoutes = require("./routes/authRoute");
 const userRoutes = require("./routes/userRoutes");
+const jobsRoutes = require("./routes/jobsRoute");
 const session = require("express-session");
 
 const app = express();
@@ -41,6 +42,7 @@ app.get("/", (req, res) => {
 
 app.use("/auth", authRoutes);
 app.use("/user", userRoutes);
+app.use("/jobs", jobsRoutes);
 
 app.get("/api/session", (req, res) => {
   console.log("Session data:", req.session);
