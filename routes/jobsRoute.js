@@ -2,6 +2,7 @@ const express = require("express");
 const { authenticateUser } = require("../utils");
 const User = require("../models/User");
 const axios = require("axios");
+const scrapeLinkedInJobs = require("../utils/LinkedinScraper");
 
 const router = express.Router();
 
@@ -13,6 +14,17 @@ const validateObjectId = (req, res, next) => {
   }
   next();
 };
+
+router.post("/scrape", async (req, res) => {
+  const { query, options } = req.body;
+  try {
+    await scrapeLinkedInJobs(query, options);
+    res.status(200).json({ message: "Scraping job data completed" });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Error scraping job data", error });
+  }
+});
 
 // Get user profile
 router.get(

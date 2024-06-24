@@ -66,3 +66,16 @@ const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
 });
+
+// Schedule tasks to be run on the server
+// cron.schedule("0 0 * * *", async () => {
+//   console.log("Running the job scraping task...");
+//   try {
+//     await scrapeLinkedInJobs("Engineer", {
+//       locations: ["United States"],
+//       limit: 20, // Set the desired limit here
+//     });
+//   } catch (error) {
+//     console.error("Error running scheduled job scraping task:", error);
+//   }
+// });
