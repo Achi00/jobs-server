@@ -6,7 +6,7 @@ function parseJobData(html) {
   const jobData = {};
 
   // Find the main content div
-  const mainContent = $(".show-more-less-html__markup");
+  const mainContent = $(".description__text description__text--rich");
 
   // Extract job title (assuming it's the first strong tag)
   jobData.jobTitle = mainContent.find("strong").first().text().trim();

@@ -25,7 +25,10 @@ const scrapeLinkedInJobs = async (query, options) => {
 
     let parsedDescription;
     try {
-      parsedDescription = JSON.parse(data.description);
+      parsedDescription =
+        typeof data.description === "string"
+          ? JSON.parse(data.description)
+          : data.description;
     } catch (error) {
       console.error("Error parsing description:", error);
       parsedDescription = {};
@@ -48,7 +51,7 @@ const scrapeLinkedInJobs = async (query, options) => {
       experienceLevel: parsedDescription.experienceLevel || "N/A",
       description: parsedDescription.description || "N/A",
       skills: parsedDescription.skills || "N/A",
-      descriptionHTML: data.descriptionHTML || "N/A",
+      descriptionHTML: data.descriptionHTML || "N/A", // Use data.descriptionHTML directly
     };
 
     console.log("Processed job data:", JSON.stringify(job, null, 2));
@@ -105,20 +108,37 @@ const scrapeLinkedInJobs = async (query, options) => {
     };
 
     const companyLogo = getCompanyLogo();
-    const jobTitle = getText(".job-details-jobs-unified-top-card__job-title");
-    const location = getText(".job-details-jobs-unified-top-card__bullet");
+    const jobTitle = getText(
+      ".job-details-jobs-unified-top-card__job-title h1"
+    );
+    const location = getText(
+      ".job-details-jobs-unified-top-card__primary-description-container .tvm__text--low-emphasis"
+    );
     const salary = getText(
       ".job-details-jobs-unified-top-card__job-insight--highlight span"
     );
     const jobType = getText(
-      ".job-details-jobs-unified-top-card__workplace-type"
+      ".job-details-jobs-unified-top-card__job-insight-view-model-secondary span.ui-label"
     );
     const experienceLevel = getText(
-      ".job-details-jobs-unified-top-card__job-insight span"
+      ".job-criteria__text--criteria:nth-child(3) span"
     );
-    const description =
-      document.querySelector(".jobs-description__content")?.innerText.trim() ||
-      "N/A";
+
+    // Capture the HTML content of the job description
+    const descriptionHTML =
+      document
+        .querySelector(".jobs-description__container.jobs-description__content")
+        ?.outerHTML.trim() || "N/A";
+
+    console.log("descriptionHTML:", descriptionHTML);
+    // console.log("companyLogo:", companyLogo);
+    // console.log("jobTitle:", jobTitle);
+    // console.log("location:", location);
+    // console.log("salary:", salary);
+    // console.log("jobType:", jobType);
+    // console.log("experienceLevel:", experienceLevel);
+    // console.log("descriptionHTML:", descriptionHTML);
+
     const skills = Array.from(
       document.querySelectorAll(
         ".job-details-jobs-unified-top-card__job-insight-text-button a"
@@ -134,6 +154,7 @@ const scrapeLinkedInJobs = async (query, options) => {
       salary,
       jobType,
       experienceLevel,
+      descriptionHTML,
       skills,
     });
 
@@ -144,7 +165,7 @@ const scrapeLinkedInJobs = async (query, options) => {
       salary,
       jobType,
       experienceLevel,
-      description,
+      descriptionHTML,
       skills,
     });
   };

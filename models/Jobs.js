@@ -17,7 +17,7 @@ const jobSchema = new mongoose.Schema({
   experienceLevel: String,
   description: String,
   skills: String,
-  descriptionHTML: String,
+  descriptionHTML: { type: String, maxLength: 16777216 },
 });
 
 module.exports = mongoose.model("Job", jobSchema);
