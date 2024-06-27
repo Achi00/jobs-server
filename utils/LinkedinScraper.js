@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const mongoose = require("mongoose");
+const cheerio = require("cheerio");
 const {
   LinkedinScraper,
   relevanceFilter,
@@ -20,19 +21,150 @@ const scrapeLinkedInJobs = async (query, options) => {
     args: ["--lang=en-GB"],
   });
 
+  // const descriptionFn = () => {
+  //   console.log("descriptionFn is called");
+  //   const getText = (selector) =>
+  //     document.querySelector(selector)?.innerText.trim() || "N/A";
+  //   const getAttribute = (selector, attribute) =>
+  //     document.querySelector(selector)?.getAttribute(attribute) || "N/A";
+
+  //   const getCompanyLogo = () => {
+  //     const selectors = [
+  //       "a[aria-label$='logo'] img.ivm-view-attr__img--centered",
+  //       ".ivm-view-attr__img-wrapper img",
+  //       ".artdeco-entity-image",
+  //       "img.ivm-view-attr__img--centered",
+  //     ];
+
+  //     for (const selector of selectors) {
+  //       const src = getAttribute(selector, "src");
+  //       if (src !== "N/A") {
+  //         console.log(`Company logo found with selector: ${selector}`);
+  //         return src;
+  //       }
+  //     }
+
+  //     console.log("Company logo not found with any selector");
+  //     return "N/A";
+  //   };
+
+  //   const companyLogo = getCompanyLogo();
+  //   const jobTitle = getText(
+  //     ".job-details-jobs-unified-top-card__job-title h1"
+  //   );
+  //   const location = getText(
+  //     ".job-details-jobs-unified-top-card__primary-description-container .tvm__text--low-emphasis"
+  //   );
+  //   const salary = getText(
+  //     ".job-details-jobs-unified-top-card__job-insight--highlight span"
+  //   );
+  //   const jobType = getText(
+  //     ".job-details-jobs-unified-top-card__job-insight-view-model-secondary span.ui-label"
+  //   );
+  //   const experienceLevel = getText(
+  //     ".job-criteria__text--criteria:nth-child(3) span"
+  //   );
+
+  //   const descriptionHTML =
+  //     document
+  //       .querySelector(".jobs-description__container.jobs-description__content")
+  //       ?.outerHTML.trim() || "N/A";
+
+  //   let mt2mb2Content = "N/A";
+  //   const mt2mb2Element = document.querySelector(".mt2.mb2");
+
+  //   if (mt2mb2Element) {
+  //     console.log("mt2mb2 element found:", mt2mb2Element);
+  //     const items = mt2mb2Element.querySelectorAll("li");
+  //     if (items.length > 0) {
+  //       mt2mb2Content = Array.from(items)
+  //         .map((item) => item.innerText.trim())
+  //         .join("\n");
+  //     } else {
+  //       console.log("No list items found within mt2mb2 element");
+  //     }
+  //   } else {
+  //     console.log("mt2mb2 element not found");
+  //   }
+
+  //   console.log("mt2mb2Content:", mt2mb2Content);
+
+  //   const skills = Array.from(
+  //     document.querySelectorAll(
+  //       ".job-details-jobs-unified-top-card__job-insight-text-button a"
+  //     )
+  //   )
+  //     .map((a) => a.innerText.trim())
+  //     .join(", ");
+
+  //   console.log("Extracted data:", {
+  //     companyLogo,
+  //     jobTitle,
+  //     location,
+  //     salary,
+  //     jobType,
+  //     experienceLevel,
+  //     descriptionHTML,
+  //     skills,
+  //     mt2mb2Content,
+  //   });
+
+  //   return JSON.stringify({
+  //     companyLogo,
+  //     jobTitle,
+  //     location,
+  //     salary,
+  //     jobType,
+  //     experienceLevel,
+  //     descriptionHTML,
+  //     skills,
+  //     mt2mb2Content,
+  //   });
+  // };
+
   scraper.on(events.scraper.data, async (data) => {
     console.log("Raw data:", JSON.stringify(data, null, 2));
 
-    let parsedDescription;
-    try {
-      parsedDescription =
-        typeof data.description === "string"
-          ? JSON.parse(data.description)
-          : data.description;
-    } catch (error) {
-      console.error("Error parsing description:", error);
-      parsedDescription = {};
-    }
+    // Extract information from the provided data
+    const extractJobDetails = (data) => {
+      const $ = cheerio.load(data.descriptionHTML);
+
+      const companyLogo =
+        $("img.ivm-view-attr__img--centered").attr("src") || "N/A";
+      const jobTitle = data.title || "N/A";
+      const location = data.place || "N/A";
+      const salary =
+        $(".job-details-jobs-unified-top-card__job-insight--highlight span")
+          .text()
+          .trim() || "N/A";
+      const jobType =
+        $(
+          ".job-details-jobs-unified-top-card__job-insight-view-model-secondary span.ui-label"
+        )
+          .text()
+          .trim() || "N/A";
+      const experienceLevel =
+        $(".job-criteria__text--criteria:nth-child(3) span").text().trim() ||
+        "N/A";
+      const skills =
+        $(".job-details-jobs-unified-top-card__job-insight-text-button a")
+          .map((i, el) => $(el).text().trim())
+          .get()
+          .join(", ") || "N/A";
+
+      return {
+        companyLogo,
+        jobTitle,
+        location,
+        salary,
+        jobType,
+        experienceLevel,
+        skills,
+        descriptionHTML: data.descriptionHTML,
+      };
+    };
+
+    const jobDetails = extractJobDetails(data);
 
     const job = {
       jobId: data.jobId,
@@ -43,15 +175,7 @@ const scrapeLinkedInJobs = async (query, options) => {
       link: data.link || "N/A",
       applyLink: data.applyLink || "N/A",
       insights: Array.isArray(data.insights) ? data.insights : [data.insights],
-      companyLogo: parsedDescription.companyLogo || "N/A",
-      jobTitle: parsedDescription.jobTitle || data.title || "N/A",
-      jobLocation: parsedDescription.location || data.location || "N/A",
-      salary: parsedDescription.salary || "N/A",
-      jobType: parsedDescription.jobType || "N/A",
-      experienceLevel: parsedDescription.experienceLevel || "N/A",
-      description: parsedDescription.description || "N/A",
-      skills: parsedDescription.skills || "N/A",
-      descriptionHTML: data.descriptionHTML || "N/A", // Use data.descriptionHTML directly
+      ...jobDetails,
     };
 
     console.log("Processed job data:", JSON.stringify(job, null, 2));
@@ -78,97 +202,7 @@ const scrapeLinkedInJobs = async (query, options) => {
 
   scraper.on(events.scraper.end, () => {
     console.log("All done!");
-    mongoose.disconnect();
   });
-
-  const descriptionFn = () => {
-    const getText = (selector) =>
-      document.querySelector(selector)?.innerText.trim() || "N/A";
-    const getAttribute = (selector, attribute) =>
-      document.querySelector(selector)?.getAttribute(attribute) || "N/A";
-
-    const getCompanyLogo = () => {
-      const selectors = [
-        "a[aria-label$='logo'] img.ivm-view-attr__img--centered",
-        ".ivm-view-attr__img-wrapper img",
-        ".artdeco-entity-image",
-        "img.ivm-view-attr__img--centered",
-      ];
-
-      for (const selector of selectors) {
-        const src = getAttribute(selector, "src");
-        if (src !== "N/A") {
-          console.log(`Company logo found with selector: ${selector}`);
-          return src;
-        }
-      }
-
-      console.log("Company logo not found with any selector");
-      return "N/A";
-    };
-
-    const companyLogo = getCompanyLogo();
-    const jobTitle = getText(
-      ".job-details-jobs-unified-top-card__job-title h1"
-    );
-    const location = getText(
-      ".job-details-jobs-unified-top-card__primary-description-container .tvm__text--low-emphasis"
-    );
-    const salary = getText(
-      ".job-details-jobs-unified-top-card__job-insight--highlight span"
-    );
-    const jobType = getText(
-      ".job-details-jobs-unified-top-card__job-insight-view-model-secondary span.ui-label"
-    );
-    const experienceLevel = getText(
-      ".job-criteria__text--criteria:nth-child(3) span"
-    );
-
-    // Capture the HTML content of the job description
-    const descriptionHTML =
-      document
-        .querySelector(".jobs-description__container.jobs-description__content")
-        ?.outerHTML.trim() || "N/A";
-
-    console.log("descriptionHTML:", descriptionHTML);
-    // console.log("companyLogo:", companyLogo);
-    // console.log("jobTitle:", jobTitle);
-    // console.log("location:", location);
-    // console.log("salary:", salary);
-    // console.log("jobType:", jobType);
-    // console.log("experienceLevel:", experienceLevel);
-    // console.log("descriptionHTML:", descriptionHTML);
-
-    const skills = Array.from(
-      document.querySelectorAll(
-        ".job-details-jobs-unified-top-card__job-insight-text-button a"
-      )
-    )
-      .map((a) => a.innerText.trim())
-      .join(", ");
-
-    console.log("Extracted data:", {
-      companyLogo,
-      jobTitle,
-      location,
-      salary,
-      jobType,
-      experienceLevel,
-      descriptionHTML,
-      skills,
-    });
-
-    return JSON.stringify({
-      companyLogo,
-      jobTitle,
-      location,
-      salary,
-      jobType,
-      experienceLevel,
-      descriptionHTML,
-      skills,
-    });
-  };
 
   try {
     await scraper.run(
@@ -177,7 +211,6 @@ const scrapeLinkedInJobs = async (query, options) => {
           query,
           options: {
             ...options,
-            descriptionFn,
           },
         },
       ],
