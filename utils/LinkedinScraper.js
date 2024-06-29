@@ -1,7 +1,6 @@
 const fs = require("fs");
 const path = require("path");
 const mongoose = require("mongoose");
-const cheerio = require("cheerio");
 const {
   LinkedinScraper,
   relevanceFilter,
@@ -21,164 +20,48 @@ const scrapeLinkedInJobs = async (query, options) => {
     args: ["--lang=en-GB"],
   });
 
-  // const descriptionFn = () => {
-  //   console.log("descriptionFn is called");
-  //   const getText = (selector) =>
-  //     document.querySelector(selector)?.innerText.trim() || "N/A";
-  //   const getAttribute = (selector, attribute) =>
-  //     document.querySelector(selector)?.getAttribute(attribute) || "N/A";
-
-  //   const getCompanyLogo = () => {
-  //     const selectors = [
-  //       "a[aria-label$='logo'] img.ivm-view-attr__img--centered",
-  //       ".ivm-view-attr__img-wrapper img",
-  //       ".artdeco-entity-image",
-  //       "img.ivm-view-attr__img--centered",
-  //     ];
-
-  //     for (const selector of selectors) {
-  //       const src = getAttribute(selector, "src");
-  //       if (src !== "N/A") {
-  //         console.log(`Company logo found with selector: ${selector}`);
-  //         return src;
-  //       }
-  //     }
-
-  //     console.log("Company logo not found with any selector");
-  //     return "N/A";
-  //   };
-
-  //   const companyLogo = getCompanyLogo();
-  //   const jobTitle = getText(
-  //     ".job-details-jobs-unified-top-card__job-title h1"
-  //   );
-  //   const location = getText(
-  //     ".job-details-jobs-unified-top-card__primary-description-container .tvm__text--low-emphasis"
-  //   );
-  //   const salary = getText(
-  //     ".job-details-jobs-unified-top-card__job-insight--highlight span"
-  //   );
-  //   const jobType = getText(
-  //     ".job-details-jobs-unified-top-card__job-insight-view-model-secondary span.ui-label"
-  //   );
-  //   const experienceLevel = getText(
-  //     ".job-criteria__text--criteria:nth-child(3) span"
-  //   );
-
-  //   const descriptionHTML =
-  //     document
-  //       .querySelector(".jobs-description__container.jobs-description__content")
-  //       ?.outerHTML.trim() || "N/A";
-
-  //   let mt2mb2Content = "N/A";
-  //   const mt2mb2Element = document.querySelector(".mt2.mb2");
-
-  //   if (mt2mb2Element) {
-  //     console.log("mt2mb2 element found:", mt2mb2Element);
-  //     const items = mt2mb2Element.querySelectorAll("li");
-  //     if (items.length > 0) {
-  //       mt2mb2Content = Array.from(items)
-  //         .map((item) => item.innerText.trim())
-  //         .join("\n");
-  //     } else {
-  //       console.log("No list items found within mt2mb2 element");
-  //     }
-  //   } else {
-  //     console.log("mt2mb2 element not found");
-  //   }
-
-  //   console.log("mt2mb2Content:", mt2mb2Content);
-
-  //   const skills = Array.from(
-  //     document.querySelectorAll(
-  //       ".job-details-jobs-unified-top-card__job-insight-text-button a"
-  //     )
-  //   )
-  //     .map((a) => a.innerText.trim())
-  //     .join(", ");
-
-  //   console.log("Extracted data:", {
-  //     companyLogo,
-  //     jobTitle,
-  //     location,
-  //     salary,
-  //     jobType,
-  //     experienceLevel,
-  //     descriptionHTML,
-  //     skills,
-  //     mt2mb2Content,
-  //   });
-
-  //   return JSON.stringify({
-  //     companyLogo,
-  //     jobTitle,
-  //     location,
-  //     salary,
-  //     jobType,
-  //     experienceLevel,
-  //     descriptionHTML,
-  //     skills,
-  //     mt2mb2Content,
-  //   });
-  // };
-
   scraper.on(events.scraper.data, async (data) => {
     console.log("Raw data:", JSON.stringify(data, null, 2));
 
-    // Extract information from the provided data
-    const extractJobDetails = (data) => {
-      const $ = cheerio.load(data.descriptionHTML);
+    let parsedDescription;
+    try {
+      parsedDescription = JSON.parse(data.description);
+      // Save the full HTML to a file
+    } catch (error) {
+      console.error("Error parsing description:", error);
+      parsedDescription = {};
+    }
 
-      const companyLogo =
-        $("img.ivm-view-attr__img--centered").attr("src") || "N/A";
-      const jobTitle = data.title || "N/A";
-      const location = data.place || "N/A";
-      const salary =
-        $(".job-details-jobs-unified-top-card__job-insight--highlight span")
-          .text()
-          .trim() || "N/A";
-      const jobType =
-        $(
-          ".job-details-jobs-unified-top-card__job-insight-view-model-secondary span.ui-label"
-        )
-          .text()
-          .trim() || "N/A";
-      const experienceLevel =
-        $(".job-criteria__text--criteria:nth-child(3) span").text().trim() ||
-        "N/A";
-      const skills =
-        $(".job-details-jobs-unified-top-card__job-insight-text-button a")
-          .map((i, el) => $(el).text().trim())
-          .get()
-          .join(", ") || "N/A";
-
-      return {
-        companyLogo,
-        jobTitle,
-        location,
-        salary,
-        jobType,
-        experienceLevel,
-        skills,
-        descriptionHTML: data.descriptionHTML,
-      };
-    };
-
-    const jobDetails = extractJobDetails(data);
+    // Validate and parse date
+    let date = new Date(data.date);
+    if (isNaN(date.getTime())) {
+      date = new Date(); // Set to current date if invalid
+    }
 
     const job = {
       jobId: data.jobId,
       title: data.title || "N/A",
       company: data.company || "N/A",
-      location: data.location || "N/A",
-      date: new Date(data.date),
+      location: parsedDescription.location || data.location || "N/A",
+      date: date, // Use the validated date
       link: data.link || "N/A",
       applyLink: data.applyLink || "N/A",
       insights: Array.isArray(data.insights) ? data.insights : [data.insights],
-      ...jobDetails,
+      companyLogo: parsedDescription.companyLogo || "N/A",
+      jobTitle: parsedDescription.jobTitle || data.title || "N/A",
+      salary: parsedDescription.salary || "N/A",
+      jobType: parsedDescription.jobType || "N/A",
+      experienceLevel: parsedDescription.experienceLevel || "N/A",
+      descriptionHTML: parsedDescription.descriptionHTML || "N/A",
+      skills: parsedDescription.skills || "N/A",
+      mt2mb2Content: parsedDescription.mt2mb2Content || "N/A",
     };
 
     console.log("Processed job data:", JSON.stringify(job, null, 2));
+    console.log(
+      "Debug info:",
+      JSON.stringify(parsedDescription._debug, null, 2)
+    );
 
     try {
       await Job.findOneAndUpdate({ jobId: data.jobId }, job, { upsert: true });
@@ -204,6 +87,111 @@ const scrapeLinkedInJobs = async (query, options) => {
     console.log("All done!");
   });
 
+  const descriptionFn = () => {
+    const getText = (selector) => {
+      const element = document.querySelector(selector);
+      return {
+        text: element ? element.innerText.trim() : "N/A",
+        found: !!element,
+      };
+    };
+
+    const getAttribute = (selector, attribute) => {
+      const element = document.querySelector(selector);
+      return {
+        value: element ? element.getAttribute(attribute) : "N/A",
+        found: !!element,
+      };
+    };
+
+    const getCompanyLogo = () => {
+      const selectors = [
+        "a[aria-label$='logo'] img.ivm-view-attr__img--centered",
+        ".ivm-view-attr__img-wrapper img",
+        ".artdeco-entity-image",
+        "img.ivm-view-attr__img--centered",
+      ];
+
+      for (const selector of selectors) {
+        const result = getAttribute(selector, "src");
+        if (result.value !== "N/A") {
+          return { value: result.value, selector };
+        }
+      }
+
+      return { value: "N/A", selector: null };
+    };
+
+    const companyLogo = getCompanyLogo();
+    const jobTitle = getText(
+      ".t-24.job-details-jobs-unified-top-card__job-title h1"
+    );
+    const location = getText(".jobs-unified-top-card__bullet");
+    const salary = getText(
+      ".jobs-unified-top-card__job-insight--highlight span"
+    );
+    const jobType = getText(".jobs-unified-top-card__workplace-type");
+    const experienceLevel = getText(
+      ".job-criteria__text--criteria:nth-child(3) span"
+    );
+
+    let mt2mb2Content = { text: "N/A", found: false };
+    const mt2mb2Element = document.querySelector(".mt2.mb2");
+
+    if (mt2mb2Element) {
+      const items = mt2mb2Element.querySelectorAll("li, p, span");
+      if (items.length > 0) {
+        mt2mb2Content = {
+          text: Array.from(items)
+            .map((item) => item.innerText.trim())
+            .join("\n"),
+          found: true,
+        };
+      } else {
+        mt2mb2Content = {
+          text: mt2mb2Element.innerText.trim(),
+          found: true,
+        };
+      }
+    }
+
+    const skills = Array.from(
+      document.querySelectorAll(
+        ".job-details-jobs-unified-top-card__job-insight-text-button a"
+      )
+    )
+      .map((a) => a.innerText.trim())
+      .join(", ");
+
+    return JSON.stringify({
+      companyLogo: companyLogo.value,
+      jobTitle: jobTitle.text,
+      location: location.text,
+      salary: salary.text,
+      jobType: jobType.text,
+      experienceLevel: experienceLevel.text,
+      descriptionHTML:
+        document.querySelector(
+          ".jobs-description__container.jobs-description__content"
+        )?.outerHTML || "N/A",
+      skills,
+      mt2mb2Content: mt2mb2Content.text,
+      fullHTML: document.documentElement.outerHTML, // Save full HTML for debugging
+      // _debug: {
+      //   selectors: {
+      //     companyLogo: companyLogo.selector,
+      //     jobTitle: jobTitle.found,
+      //     location: location.found,
+      //     salary: salary.found,
+      //     jobType: jobType.found,
+      //     experienceLevel: experienceLevel.found,
+      //     mt2mb2: mt2mb2Content.found,
+      //   },
+      //   mt2mb2ElementExists: !!document.querySelector(".mt2.mb2"),
+      // },
+    });
+  };
+
   try {
     await scraper.run(
       [
@@ -211,6 +199,7 @@ const scrapeLinkedInJobs = async (query, options) => {
           query,
           options: {
             ...options,
+            descriptionFn: descriptionFn,
           },
         },
       ],

@@ -11,13 +11,12 @@ const jobSchema = new mongoose.Schema({
   insights: [String],
   companyLogo: String,
   jobTitle: String,
-  jobLocation: String,
-  salary: String,
-  jobType: String,
   experienceLevel: String,
   description: String,
   skills: String,
+  location: String,
   descriptionHTML: { type: String, maxLength: 16777216 },
+  mt2mb2Content: String,
 });
 
 module.exports = mongoose.model("Job", jobSchema);
