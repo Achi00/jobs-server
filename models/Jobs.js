@@ -2,7 +2,6 @@ const mongoose = require("mongoose");
 
 const jobSchema = new mongoose.Schema({
   jobId: { type: String, required: true, unique: true },
-  title: String,
   company: String,
   location: String,
   date: Date,
@@ -11,7 +10,6 @@ const jobSchema = new mongoose.Schema({
   insights: [String],
   companyLogo: String,
   jobTitle: String,
-  experienceLevel: String,
   description: String,
   skills: String,
   location: String,

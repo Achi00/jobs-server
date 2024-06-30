@@ -12,6 +12,7 @@ const {
   events,
 } = require("linkedin-jobs-scraper");
 const Job = require("../models/Jobs");
+const cheerio = require("cheerio");
 
 const scrapeLinkedInJobs = async (query, options) => {
   const scraper = new LinkedinScraper({
@@ -20,13 +21,32 @@ const scrapeLinkedInJobs = async (query, options) => {
     args: ["--lang=en-GB"],
   });
 
+  const cleanJobObject = (job) => {
+    const cleanedJob = {};
+    for (const [key, value] of Object.entries(job)) {
+      if (value && value !== "Not Specified" && value.length > 0) {
+        cleanedJob[key] = value;
+      }
+    }
+    return cleanedJob;
+  };
+
   scraper.on(events.scraper.data, async (data) => {
-    console.log("Raw data:", JSON.stringify(data, null, 2));
+    // console.log("Raw data:", JSON.stringify(data, null, 2));
+
+    console.log("insights:", JSON.stringify(data.insights, null, 2));
 
     let parsedDescription;
     try {
       parsedDescription = JSON.parse(data.description);
+
       // Save the full HTML to a file
+      const fileName = `job_${data.jobId}_${Date.now()}.html`;
+      fs.writeFileSync(
+        path.join(__dirname, fileName),
+        parsedDescription.fullHTML
+      );
+      console.log(`Saved full HTML to ${fileName}`);
     } catch (error) {
       console.error("Error parsing description:", error);
       parsedDescription = {};
@@ -38,34 +58,71 @@ const scrapeLinkedInJobs = async (query, options) => {
       date = new Date(); // Set to current date if invalid
     }
 
-    const job = {
-      jobId: data.jobId,
-      title: data.title || "N/A",
-      company: data.company || "N/A",
-      location: parsedDescription.location || data.location || "N/A",
-      date: date, // Use the validated date
-      link: data.link || "N/A",
-      applyLink: data.applyLink || "N/A",
-      insights: Array.isArray(data.insights) ? data.insights : [data.insights],
-      companyLogo: parsedDescription.companyLogo || "N/A",
-      jobTitle: parsedDescription.jobTitle || data.title || "N/A",
-      salary: parsedDescription.salary || "N/A",
-      jobType: parsedDescription.jobType || "N/A",
-      experienceLevel: parsedDescription.experienceLevel || "N/A",
-      descriptionHTML: parsedDescription.descriptionHTML || "N/A",
-      skills: parsedDescription.skills || "N/A",
-      mt2mb2Content: parsedDescription.mt2mb2Content || "N/A",
+    // Use Cheerio to remove HTML tags from descriptionHTML
+    const $ = cheerio.load(parsedDescription.descriptionHTML || "");
+    const cleanDescriptionHTML = $.text().trim() || "Not Specified";
+
+    // Format skills
+    const formatSkills = (skillsData) => {
+      if (typeof skillsData === "string") {
+        return skillsData; // This will be "Not Specified" if no skills were found
+      }
+
+      if (skillsData.onProfile || skillsData.missing) {
+        let formattedSkills = "";
+        if (skillsData.onProfile.length > 0) {
+          formattedSkills += `${skillsData.onProfile.join(", ")}\n`;
+        }
+        if (skillsData.missing.length > 0) {
+          formattedSkills += `${skillsData.missing.join(", ")}`;
+        }
+        return formattedSkills.trim();
+      }
+
+      if (skillsData.general) {
+        let formattedSkills = skillsData.general.join(", ");
+        if (skillsData.additional) {
+          formattedSkills += ` (+${skillsData.additional} more)`;
+        }
+        return formattedSkills;
+      }
+
+      return "Not Specified";
     };
 
-    console.log("Processed job data:", JSON.stringify(job, null, 2));
-    console.log(
-      "Debug info:",
-      JSON.stringify(parsedDescription._debug, null, 2)
-    );
+    const job = {
+      jobId: data.jobId,
+      company: data.company || "Not Specified",
+      location: parsedDescription.location || data.location || "Not Specified",
+      date: date,
+      link: data.link || "Not Specified",
+      applyLink: data.link || "Not Specified",
+      insights: Array.isArray(data.insights) ? data.insights : [data.insights],
+      companyLogo: parsedDescription.companyLogo || "Not Specified",
+      jobTitle: parsedDescription.jobTitle || data.title || "Not Specified",
+      salary: (parsedDescription.salary || "Not Specified")
+        .replace(/Matches your job preferences,?/, "")
+        .trim(),
+      jobType: (parsedDescription.jobType || "Not Specified")
+        .replace(/Matches your job preferences,?/, "")
+        .trim(),
+      descriptionHTML: cleanDescriptionHTML,
+      skills: formatSkills(parsedDescription.skills),
+      mt2mb2Content: parsedDescription.mt2mb2Content || "Not Specified",
+    };
+
+    // console.log("Processed job data:", JSON.stringify(job, null, 2));
+    // console.log(
+    //   "Debug info:",
+    //   JSON.stringify(parsedDescription._debug, null, 2)
+    // );
 
     try {
-      await Job.findOneAndUpdate({ jobId: data.jobId }, job, { upsert: true });
-      console.log(`Saved job: ${job.title}`);
+      const cleanedJob = cleanJobObject(job);
+      await Job.findOneAndUpdate({ jobId: data.jobId }, cleanedJob, {
+        upsert: true,
+      });
+      console.log(`Saved job: ${job.jobTitle}`);
     } catch (error) {
       console.error("Error saving job:", error);
     }
@@ -91,7 +148,7 @@ const scrapeLinkedInJobs = async (query, options) => {
     const getText = (selector) => {
       const element = document.querySelector(selector);
       return {
-        text: element ? element.innerText.trim() : "N/A",
+        text: element ? element.innerText.trim() : "Not Specified",
         found: !!element,
       };
     };
@@ -99,7 +156,7 @@ const scrapeLinkedInJobs = async (query, options) => {
     const getAttribute = (selector, attribute) => {
       const element = document.querySelector(selector);
       return {
-        value: element ? element.getAttribute(attribute) : "N/A",
+        value: element ? element.getAttribute(attribute) : "Not Specified",
         found: !!element,
       };
     };
@@ -114,54 +171,147 @@ const scrapeLinkedInJobs = async (query, options) => {
 
       for (const selector of selectors) {
         const result = getAttribute(selector, "src");
-        if (result.value !== "N/A") {
+        if (result.value !== "Not Specified") {
           return { value: result.value, selector };
         }
       }
 
-      return { value: "N/A", selector: null };
+      return { value: "Not Specified", selector: null };
+    };
+
+    const getInsights = () => {
+      const insightElements = document.querySelectorAll(
+        ".jobs-unified-top-card__job-insight"
+      );
+      return Array.from(insightElements)
+        .map((el) => el.textContent.trim())
+        .filter(
+          (text) =>
+            !text.includes("Show more") &&
+            !text.includes("Try Premium") &&
+            !text.includes("Am I a good fit") &&
+            !text.includes("How can I best position myself") &&
+            !text.includes("Tell me more about")
+        );
+    };
+
+    const getMt2mb2Content = () => {
+      const mt2mb2Element = document.querySelector(".mt2.mb2");
+      if (mt2mb2Element) {
+        const items = mt2mb2Element.querySelectorAll("li, p, span");
+        const texts = Array.from(items).map((item) => item.textContent.trim());
+        // Remove duplicates and filter out promotional content
+        return [...new Set(texts)]
+          .filter(
+            (text) =>
+              !text.includes("Matches your job preferences") &&
+              !text.includes("Show more") &&
+              !text.includes("Try Premium") &&
+              text.length > 0
+          )
+          .join("\n");
+      }
+      return "Not Specified";
+    };
+
+    // Extract all skills from the specified elements
+    const getSkills = () => {
+      console.log("Starting skills extraction");
+
+      // Method 1: Try to get detailed skills breakdown
+      const getDetailedSkills = () => {
+        const skillsData = {
+          onProfile: [],
+          missing: [],
+        };
+
+        const extractSkills = (headerText) => {
+          const headers = Array.from(document.querySelectorAll(".t-14.t-bold"));
+          console.log(`Found ${headers.length} potential skill headers`);
+          const header = headers.find((el) =>
+            el.textContent.includes(headerText)
+          );
+          if (header) {
+            console.log(`Found header: ${headerText}`);
+            const skillsElement = header.nextElementSibling;
+            if (
+              skillsElement &&
+              skillsElement.classList.contains(
+                "job-details-how-you-match__skills-item-subtitle"
+              )
+            ) {
+              return skillsElement.textContent.split(" and ");
+            }
+          }
+          return [];
+        };
+
+        skillsData.onProfile = extractSkills("skills on your profile");
+        skillsData.missing = extractSkills("skills missing on your profile");
+
+        console.log("Detailed skills data:", skillsData);
+        return skillsData;
+      };
+
+      // Method 2: Try to get general skills list
+      const getGeneralSkills = () => {
+        const generalSkills = document.querySelector(
+          ".job-details-jobs-unified-top-card__job-insight-text-button"
+        );
+        if (generalSkills) {
+          console.log("Found general skills element");
+          const skillsText = generalSkills.textContent.trim();
+          const match = skillsText.match(/Skills: (.+?)(?:, \+(\d+) more)?$/);
+          if (match) {
+            const listedSkills = match[1].split(", ");
+            const additional = match[2] ? parseInt(match[2]) : 0;
+            console.log(
+              "General skills:",
+              listedSkills,
+              "Additional:",
+              additional
+            );
+            return { general: listedSkills, additional };
+          }
+        }
+        return null;
+      };
+
+      const detailedSkills = getDetailedSkills();
+      if (
+        detailedSkills.onProfile.length > 0 ||
+        detailedSkills.missing.length > 0
+      ) {
+        return detailedSkills;
+      }
+
+      const generalSkills = getGeneralSkills();
+      if (generalSkills) {
+        return generalSkills;
+      }
+
+      console.log("No skills found");
+      return "Not Specified";
     };
 
     const companyLogo = getCompanyLogo();
     const jobTitle = getText(
       ".t-24.job-details-jobs-unified-top-card__job-title h1"
     );
-    const location = getText(".jobs-unified-top-card__bullet");
+    const location = getText(".t-black--light.mt2 span:first-child");
     const salary = getText(
       ".jobs-unified-top-card__job-insight--highlight span"
     );
     const jobType = getText(".jobs-unified-top-card__workplace-type");
-    const experienceLevel = getText(
-      ".job-criteria__text--criteria:nth-child(3) span"
-    );
 
-    let mt2mb2Content = { text: "N/A", found: false };
-    const mt2mb2Element = document.querySelector(".mt2.mb2");
+    const descriptionHTML =
+      document.querySelector(
+        ".jobs-description__container .jobs-description__content .mt4"
+      )?.outerHTML || "Not Specified";
 
-    if (mt2mb2Element) {
-      const items = mt2mb2Element.querySelectorAll("li, p, span");
-      if (items.length > 0) {
-        mt2mb2Content = {
-          text: Array.from(items)
-            .map((item) => item.innerText.trim())
-            .join("\n"),
-          found: true,
-        };
-      } else {
-        mt2mb2Content = {
-          text: mt2mb2Element.innerText.trim(),
-          found: true,
-        };
-      }
-    }
-
-    const skills = Array.from(
-      document.querySelectorAll(
-        ".job-details-jobs-unified-top-card__job-insight-text-button a"
-      )
-    )
-      .map((a) => a.innerText.trim())
-      .join(", ");
+    const insights = getInsights();
+    const mt2mb2Content = getMt2mb2Content();
+    const skills = getSkills();
 
     return JSON.stringify({
       companyLogo: companyLogo.value,
@@ -169,26 +319,20 @@ const scrapeLinkedInJobs = async (query, options) => {
       location: location.text,
       salary: salary.text,
       jobType: jobType.text,
-      experienceLevel: experienceLevel.text,
-      descriptionHTML:
-        document.querySelector(
-          ".jobs-description__container.jobs-description__content"
-        )?.outerHTML || "N/A",
-      skills,
-      mt2mb2Content: mt2mb2Content.text,
+      descriptionHTML: descriptionHTML,
+      skills: skills,
+      insights,
+      mt2mb2Content,
       fullHTML: document.documentElement.outerHTML, // Save full HTML for debugging
-      // _debug: {
-      //   selectors: {
-      //     companyLogo: companyLogo.selector,
-      //     jobTitle: jobTitle.found,
-      //     location: location.found,
-      //     salary: salary.found,
-      //     jobType: jobType.found,
-      //     experienceLevel: experienceLevel.found,
-      //     mt2mb2: mt2mb2Content.found,
-      //   },
-      //   mt2mb2ElementExists: !!document.querySelector(".mt2.mb2"),
-      // },
+      _debug: {
+        selectors: {
+          companyLogo: companyLogo.selector,
+          jobTitle: jobTitle.found,
+          location: location.found,
+          salary: salary.found,
+          jobType: jobType.found,
+        },
+      },
     });
   };
 
