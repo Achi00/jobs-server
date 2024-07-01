@@ -31,6 +31,128 @@ const scrapeLinkedInJobs = async (query, options) => {
     return cleanedJob;
   };
 
+  const extractInsights = (insights, mt2mb2Content) => {
+    let salary = "Not Specified";
+    let jobType = "Not Specified";
+    let locationType = "Not Specified";
+    let employees = "Not Specified";
+
+    insights.forEach((insight) => {
+      if (insight.match(/^\$\d+K\/yr\s*-\s*\$\d+K\/yr/)) {
+        const matches = insight.match(/^\$\d+K\/yr\s*-\s*\$\d+K\/yr/);
+        if (matches) {
+          salary = matches[0];
+        }
+      } else if (insight.match(/^\$\d+K\/yr/)) {
+        const matches = insight.match(/^\$\d+K\/yr/);
+        if (matches) {
+          salary = matches[0];
+        }
+      }
+
+      if (insight.includes("Full-time")) {
+        jobType = "Full-time";
+      } else if (insight.includes("Part-time")) {
+        jobType = "Part-time";
+      } else if (insight.includes("Contract")) {
+        jobType = "Contract";
+      }
+
+      if (insight.includes("Remote")) {
+        locationType = "Remote";
+      } else if (insight.includes("On-site")) {
+        locationType = "On-site";
+      } else if (insight.includes("Hybrid")) {
+        locationType = "Hybrid";
+      }
+
+      if (insight.match(/^\d+-\d+ employees/)) {
+        employees = insight.match(/^\d+-\d+ employees/)[0];
+      }
+    });
+
+    // If employees is not found in insights, check mt2mb2Content
+    if (employees === "Not Specified" && mt2mb2Content) {
+      const matches = mt2mb2Content.match(/\d+-\d+ employees/);
+      if (matches) {
+        employees = matches[0];
+      }
+    }
+
+    return { salary, jobType, locationType, employees };
+  };
+
+  scraper.on(events.scraper.data, async (data) => {
+    console.log("Raw data:", JSON.stringify(data, null, 2));
+
+    let parsedDescription;
+    try {
+      parsedDescription = JSON.parse(data.description);
+
+      // Save the full HTML to a file
+      // const fileName = `job_${data.jobId}_${Date.now()}.html`;
+      // fs.writeFileSync(
+      //   path.join(__dirname, fileName),
+      //   parsedDescription.fullHTML
+      // );
+      // console.log(`Saved full HTML to ${fileName}`);
+    } catch (error) {
+      console.error("Error parsing description:", error);
+      parsedDescription = {};
+    }
+
+    // Validate and parse date
+    let date = new Date(data.date);
+    if (isNaN(date.getTime())) {
+      date = new Date(); // Set to current date if invalid
+    }
+
+    // Use Cheerio to remove HTML tags from descriptionHTML
+    const $ = cheerio.load(parsedDescription.descriptionHTML || "");
+    const cleanDescriptionHTML = $.text().trim() || "Not Specified";
+
+    const insights = extractInsights(
+      data.insights || [],
+      parsedDescription.mt2mb2Content || ""
+    );
+
+    const job = {
+      jobId: data.jobId,
+      company: data.company || "Not Specified",
+      location: parsedDescription.location || data.location || "Not Specified",
+      date: date,
+      link: data.link || "Not Specified",
+      applyLink: data.link || "Not Specified",
+      companyLogo: parsedDescription.companyLogo || "Not Specified",
+      jobTitle: parsedDescription.jobTitle || data.title || "Not Specified",
+      description: parsedDescription.description || "Not Specified",
+      descriptionHTML: cleanDescriptionHTML,
+      skills: parsedDescription.skills || "Not Specified",
+      mt2mb2Content: parsedDescription.mt2mb2Content || "Not Specified",
+      salary: insights.salary,
+      jobType: insights.jobType,
+      locationType: insights.locationType,
+      employees: insights.employees,
+    };
+
+    console.log("Processed job data:", JSON.stringify(job, null, 2));
+    console.log(
+      "Debug info:",
+      JSON.stringify(parsedDescription._debug, null, 2)
+    );
+
+    try {
+      const cleanedJob = cleanJobObject(job);
+      await Job.findOneAndUpdate({ jobId: data.jobId }, cleanedJob, {
+        upsert: true,
+      });
+      console.log(`Saved job: ${job.jobTitle}`);
+      console.log(`Employees: ${job.employees}`);
+    } catch (error) {
+      console.error("Error saving job:", error);
+    }
+  });
+
   scraper.on(events.scraper.data, async (data) => {
     // console.log("Raw data:", JSON.stringify(data, null, 2));
 
@@ -90,6 +212,9 @@ const scrapeLinkedInJobs = async (query, options) => {
       return "Not Specified";
     };
 
+    // clean insight data
+    const insights = extractInsights(data.insights || []);
+
     const job = {
       jobId: data.jobId,
       company: data.company || "Not Specified",
@@ -97,18 +222,16 @@ const scrapeLinkedInJobs = async (query, options) => {
       date: date,
       link: data.link || "Not Specified",
       applyLink: data.link || "Not Specified",
-      insights: Array.isArray(data.insights) ? data.insights : [data.insights],
       companyLogo: parsedDescription.companyLogo || "Not Specified",
       jobTitle: parsedDescription.jobTitle || data.title || "Not Specified",
-      salary: (parsedDescription.salary || "Not Specified")
-        .replace(/Matches your job preferences,?/, "")
-        .trim(),
-      jobType: (parsedDescription.jobType || "Not Specified")
-        .replace(/Matches your job preferences,?/, "")
-        .trim(),
+      description: parsedDescription.description || "Not Specified",
       descriptionHTML: cleanDescriptionHTML,
-      skills: formatSkills(parsedDescription.skills),
+      skills: parsedDescription.skills || "Not Specified",
       mt2mb2Content: parsedDescription.mt2mb2Content || "Not Specified",
+      salary: insights.salary,
+      jobType: insights.jobType,
+      locationType: insights.locationType,
+      employees: insights.employees,
     };
 
     // console.log("Processed job data:", JSON.stringify(job, null, 2));

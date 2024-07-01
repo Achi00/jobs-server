@@ -7,14 +7,16 @@ const jobSchema = new mongoose.Schema({
   date: Date,
   link: String,
   applyLink: String,
-  insights: [String],
   companyLogo: String,
   jobTitle: String,
   description: String,
   skills: String,
-  location: String,
   descriptionHTML: { type: String, maxLength: 16777216 },
   mt2mb2Content: String,
+  salary: String,
+  jobType: String,
+  locationType: String,
+  employees: String,
 });
 
 module.exports = mongoose.model("Job", jobSchema);
