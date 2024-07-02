@@ -12,7 +12,7 @@ const jobSchema = new mongoose.Schema({
   description: String,
   skills: String,
   descriptionHTML: { type: String, maxLength: 16777216 },
-  mt2mb2Content: String,
+  jobInfo: String,
   salary: String,
   jobType: String,
   locationType: String,
