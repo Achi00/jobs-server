@@ -3,6 +3,7 @@ const { authenticateUser } = require("../utils");
 const User = require("../models/User");
 const axios = require("axios");
 const scrapeLinkedInJobs = require("../utils/LinkedinScraper");
+const Job = require("../models/Jobs");
 
 const router = express.Router();
 
@@ -15,6 +16,7 @@ const validateObjectId = (req, res, next) => {
   next();
 };
 
+// scrape linkedin jobs
 router.post("/scrape", async (req, res) => {
   const { query, options } = req.body;
   try {
@@ -23,6 +25,31 @@ router.post("/scrape", async (req, res) => {
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Error scraping job data", error });
+  }
+});
+
+// get all jobs
+router.get("/getjobs", async (req, res) => {
+  try {
+    const jobs = await Job.find();
+    res.status(200).json(jobs);
+  } catch (error) {
+    console.error("Error fetching jobs:", error);
+    res.status(500).json({ error: "An error occurred while fetching jobs" });
+  }
+});
+
+// get job based on id
+router.get("/getjobs/:id", async (req, res) => {
+  try {
+    const job = await Job.findById(req.params.id);
+    if (!job) {
+      return res.status(404).json({ error: "Job not found" });
+    }
+    res.status(200).json(job);
+  } catch (error) {
+    console.error("Error fetching job:", error);
+    res.status(500).json({ error: "An error occurred while fetching the job" });
   }
 });
 
