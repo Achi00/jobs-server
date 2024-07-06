@@ -38,21 +38,18 @@ const scrapeLinkedInJobs = async (query, options) => {
     let employees = "Not Specified";
 
     insights.forEach((insight) => {
-      // Extract salary range in format "$123K/yr - $456K/yr" or "$63/hr - $75/hr"
       let matches = insight.match(
         /\$[\d,.]+(?:K)?\/(?:yr|hr)\s*-\s*\$[\d,.]+(?:K)?\/(?:yr|hr)/
       );
       if (matches) {
         salary = matches[0];
       } else {
-        // Extract salary single value in format "$123K/yr" or "$63/hr"
         matches = insight.match(/\$[\d,.]+(?:K)?\/(?:yr|hr)/);
         if (matches) {
           salary = matches[0];
         }
       }
 
-      // Extract job type
       if (insight.includes("Full-time")) {
         jobType = "Full-time";
       } else if (insight.includes("Part-time")) {
@@ -61,7 +58,6 @@ const scrapeLinkedInJobs = async (query, options) => {
         jobType = "Contract";
       }
 
-      // Extract location type
       if (insight.includes("Remote")) {
         locationType = "Remote";
       } else if (insight.includes("On-site")) {
@@ -70,7 +66,6 @@ const scrapeLinkedInJobs = async (query, options) => {
         locationType = "Hybrid";
       }
 
-      // Extract employees range
       matches = insight.match(
         /(\d{1,3}(?:,\d{3})*(?:\+)?)\s*-\s*(\d{1,3}(?:,\d{3})*(?:\+)?)\s*employees/
       );
@@ -84,7 +79,6 @@ const scrapeLinkedInJobs = async (query, options) => {
       }
     });
 
-    // If employees is not found in insights, check jobInfo
     if (employees === "Not Specified" && jobInfo) {
       const matches = jobInfo.match(
         /(\d{1,3}(?:,\d{3})*(?:\+)?)\s*-\s*(\d{1,3}(?:,\d{3})*(?:\+)?)\s*employees/
@@ -101,7 +95,6 @@ const scrapeLinkedInJobs = async (query, options) => {
       }
     }
 
-    // If salary is not found in insights, check jobInfo
     if (salary === "Not Specified" && jobInfo) {
       const salaryMatches = jobInfo.match(
         /\$[\d,.]+(?:K)?\/(?:yr|hr)\s*-\s*\$[\d,.]+(?:K)?\/(?:yr|hr)/
@@ -125,156 +118,6 @@ const scrapeLinkedInJobs = async (query, options) => {
     let parsedDescription;
     try {
       parsedDescription = JSON.parse(data.description);
-
-      // Save the full HTML to a file
-      // const fileName = `job_${data.jobId}_${Date.now()}.html`;
-      // fs.writeFileSync(
-      //   path.join(__dirname, fileName),
-      //   parsedDescription.fullHTML
-      // );
-      // console.log(`Saved full HTML to ${fileName}`);
-    } catch (error) {
-      console.error("Error parsing description:", error);
-      parsedDescription = {};
-    }
-
-    // Validate and parse date
-    let date = new Date(data.date);
-    if (isNaN(date.getTime())) {
-      date = new Date(); // Set to current date if invalid
-    }
-
-    // Use Cheerio to remove HTML tags from descriptionHTML
-    const $ = cheerio.load(parsedDescription.descriptionHTML || "");
-    const cleanDescriptionHTML = $.text().trim() || "Not Specified";
-
-    const insights = extractInsights(
-      data.insights || [],
-      parsedDescription.mt2mb2Content || ""
-    );
-
-    const job = {
-      jobId: data.jobId,
-      company: data.company || "Not Specified",
-      location: parsedDescription.location || data.location || "Not Specified",
-      date: date,
-      link: data.link || "Not Specified",
-      applyLink: data.link || "Not Specified",
-      companyLogo: parsedDescription.companyLogo || "Not Specified",
-      jobTitle: parsedDescription.jobTitle || data.title || "Not Specified",
-      description: parsedDescription.description || "Not Specified",
-      descriptionHTML: cleanDescriptionHTML,
-      skills: parsedDescription.skills || "Not Specified",
-      jobInfo: parsedDescription.mt2mb2Content || "Not Specified",
-      salary: insights.salary,
-      jobType: insights.jobType,
-      locationType: insights.locationType,
-      employees: insights.employees,
-    };
-
-    console.log("Processed job data:", JSON.stringify(job, null, 2));
-    console.log(
-      "Debug info:",
-      JSON.stringify(parsedDescription._debug, null, 2)
-    );
-
-    try {
-      const cleanedJob = cleanJobObject(job);
-      await Job.findOneAndUpdate({ jobId: data.jobId }, cleanedJob, {
-        upsert: true,
-      });
-      console.log(`Saved job: ${job.jobTitle}`);
-      console.log(`Employees: ${job.employees}`);
-    } catch (error) {
-      console.error("Error saving job:", error);
-    }
-  });
-
-  scraper.on(events.scraper.data, async (data) => {
-    console.log("Raw data:", JSON.stringify(data, null, 2));
-
-    let parsedDescription;
-    try {
-      parsedDescription = JSON.parse(data.description);
-
-      // // Save the full HTML to a file
-      // const fileName = `job_${data.jobId}_${Date.now()}.html`;
-      // fs.writeFileSync(
-      //   path.join(__dirname, fileName),
-      //   parsedDescription.fullHTML
-      // );
-      // console.log(`Saved full HTML to ${fileName}`);
-    } catch (error) {
-      console.error("Error parsing description:", error);
-      parsedDescription = {};
-    }
-
-    // Validate and parse date
-    let date = new Date(data.date);
-    if (isNaN(date.getTime())) {
-      date = new Date(); // Set to current date if invalid
-    }
-
-    // Use Cheerio to remove HTML tags from descriptionHTML
-    const $ = cheerio.load(parsedDescription.descriptionHTML || "");
-    const cleanDescriptionHTML = $.text().trim() || "Not Specified";
-
-    const insights = extractInsights(
-      data.insights || [],
-      parsedDescription.mt2mb2Content || ""
-    );
-
-    const job = {
-      jobId: data.jobId,
-      company: data.company || "Not Specified",
-      location: parsedDescription.location || data.location || "Not Specified",
-      date: date,
-      link: data.link || "Not Specified",
-      applyLink: data.link || "Not Specified",
-      companyLogo: parsedDescription.companyLogo || "Not Specified",
-      jobTitle: parsedDescription.jobTitle || data.title || "Not Specified",
-      description: parsedDescription.description || "Not Specified",
-      descriptionHTML: cleanDescriptionHTML,
-      skills: parsedDescription.skills || "Not Specified",
-      jobInfo: parsedDescription.mt2mb2Content || "Not Specified",
-      salary: insights.salary,
-      jobType: insights.jobType,
-      locationType: insights.locationType,
-      employees: insights.employees,
-    };
-
-    // console.log("Processed job data:", JSON.stringify(job, null, 2));
-    // console.log(
-    //   "Debug info:",
-    //   JSON.stringify(parsedDescription._debug, null, 2)
-    // );
-
-    try {
-      const cleanedJob = cleanJobObject(job);
-      await Job.findOneAndUpdate({ jobId: data.jobId }, cleanedJob, {
-        upsert: true,
-      });
-      console.log(`Saved job: ${job.jobTitle}`);
-      console.log(`Employees: ${job.employees}`);
-    } catch (error) {
-      console.error("Error saving job:", error);
-    }
-  });
-
-  scraper.on(events.scraper.data, async (data) => {
-    console.log("Raw data:", JSON.stringify(data, null, 2));
-
-    let parsedDescription;
-    try {
-      parsedDescription = JSON.parse(data.description);
-
-      // Save the full HTML to a file
-      // const fileName = `job_${data.jobId}_${Date.now()}.html`;
-      // fs.writeFileSync(
-      //   path.join(__dirname, fileName),
-      //   parsedDescription.fullHTML
-      // );
-      // console.log(`Saved full HTML to ${fileName}`);
     } catch (error) {
       console.error("Error parsing description:", error);
       parsedDescription = {};
@@ -295,6 +138,14 @@ const scrapeLinkedInJobs = async (query, options) => {
       parsedDescription.jobInfo || ""
     );
 
+    let skills = parsedDescription.skills || "Not Specified";
+    if (skills !== "Not Specified") {
+      const combinedSkills = [...skills.onProfile, ...skills.missing].join(
+        ", "
+      );
+      skills = combinedSkills;
+    }
+
     const job = {
       jobId: data.jobId,
       company: data.company || "Not Specified",
@@ -306,7 +157,7 @@ const scrapeLinkedInJobs = async (query, options) => {
       jobTitle: parsedDescription.jobTitle || data.title || "Not Specified",
       description: parsedDescription.description || "Not Specified",
       descriptionHTML: cleanDescriptionHTML,
-      skills: parsedDescription.skills || "Not Specified",
+      skills: skills,
       jobInfo: parsedDescription.jobInfo || "Not Specified",
       salary: insights.salary,
       jobType: insights.jobType,
@@ -314,11 +165,7 @@ const scrapeLinkedInJobs = async (query, options) => {
       employees: insights.employees,
     };
 
-    // console.log("Processed job data:", JSON.stringify(job, null, 2));
-    // console.log(
-    //   "Debug info:",
-    //   JSON.stringify(parsedDescription._debug, null, 2)
-    // );
+    console.log("Processed job data:", JSON.stringify(job, null, 2));
 
     try {
       const cleanedJob = cleanJobObject(job);
@@ -327,104 +174,6 @@ const scrapeLinkedInJobs = async (query, options) => {
       });
       console.log(`Saved job: ${job.jobTitle}`);
       console.log(`Employees: ${job.employees}`);
-    } catch (error) {
-      console.error("Error saving job:", error);
-    }
-  });
-
-  scraper.on(events.scraper.data, async (data) => {
-    // console.log("Raw data:", JSON.stringify(data, null, 2));
-
-    console.log("insights:", JSON.stringify(data.insights, null, 2));
-
-    let parsedDescription;
-    try {
-      parsedDescription = JSON.parse(data.description);
-
-      // Save the full HTML to a file
-      // const fileName = `job_${data.jobId}_${Date.now()}.html`;
-      // fs.writeFileSync(
-      //   path.join(__dirname, fileName),
-      //   parsedDescription.fullHTML
-      // );
-      // console.log(`Saved full HTML to ${fileName}`);
-    } catch (error) {
-      console.error("Error parsing description:", error);
-      parsedDescription = {};
-    }
-
-    // Validate and parse date
-    let date = new Date(data.date);
-    if (isNaN(date.getTime())) {
-      date = new Date(); // Set to current date if invalid
-    }
-
-    // Use Cheerio to remove HTML tags from descriptionHTML
-    const $ = cheerio.load(parsedDescription.descriptionHTML || "");
-    const cleanDescriptionHTML = $.text().trim() || "Not Specified";
-
-    // Format skills
-    const formatSkills = (skillsData) => {
-      if (typeof skillsData === "string") {
-        return skillsData; // This will be "Not Specified" if no skills were found
-      }
-
-      if (skillsData.onProfile || skillsData.missing) {
-        let formattedSkills = "";
-        if (skillsData.onProfile.length > 0) {
-          formattedSkills += `${skillsData.onProfile.join(", ")}\n`;
-        }
-        if (skillsData.missing.length > 0) {
-          formattedSkills += `${skillsData.missing.join(", ")}`;
-        }
-        return formattedSkills.trim();
-      }
-
-      if (skillsData.general) {
-        let formattedSkills = skillsData.general.join(", ");
-        if (skillsData.additional) {
-          formattedSkills += ` (+${skillsData.additional} more)`;
-        }
-        return formattedSkills;
-      }
-
-      return "Not Specified";
-    };
-
-    // clean insight data
-    const insights = extractInsights(data.insights || []);
-
-    const job = {
-      jobId: data.jobId,
-      company: data.company || "Not Specified",
-      location: parsedDescription.location || data.location || "Not Specified",
-      date: date,
-      link: data.link || "Not Specified",
-      applyLink: data.link || "Not Specified",
-      companyLogo: parsedDescription.companyLogo || "Not Specified",
-      jobTitle: parsedDescription.jobTitle || data.title || "Not Specified",
-      description: parsedDescription.description || "Not Specified",
-      descriptionHTML: cleanDescriptionHTML,
-      skills: parsedDescription.skills || "Not Specified",
-      jobInfo: parsedDescription.jobInfo || "Not Specified",
-      salary: insights.salary,
-      jobType: insights.jobType,
-      locationType: insights.locationType,
-      employees: insights.employees,
-    };
-
-    // console.log("Processed job data:", JSON.stringify(job, null, 2));
-    // console.log(
-    //   "Debug info:",
-    //   JSON.stringify(parsedDescription._debug, null, 2)
-    // );
-
-    try {
-      const cleanedJob = cleanJobObject(job);
-      await Job.findOneAndUpdate({ jobId: data.jobId }, cleanedJob, {
-        upsert: true,
-      });
-      console.log(`Saved job: ${job.jobTitle}`);
     } catch (error) {
       console.error("Error saving job:", error);
     }
@@ -502,7 +251,6 @@ const scrapeLinkedInJobs = async (query, options) => {
       if (mt2mb2Element) {
         const items = mt2mb2Element.querySelectorAll("li, p, span");
         const texts = Array.from(items).map((item) => item.textContent.trim());
-        // Remove duplicates and filter out promotional content
         return [...new Set(texts)]
           .filter(
             (text) =>
@@ -516,11 +264,9 @@ const scrapeLinkedInJobs = async (query, options) => {
       return "Not Specified";
     };
 
-    // Extract all skills from the specified elements
     const getSkills = () => {
       console.log("Starting skills extraction");
 
-      // Method 1: Try to get detailed skills breakdown
       const getDetailedSkills = () => {
         const skillsData = {
           onProfile: [],
@@ -529,12 +275,10 @@ const scrapeLinkedInJobs = async (query, options) => {
 
         const extractSkills = (headerText) => {
           const headers = Array.from(document.querySelectorAll(".t-14.t-bold"));
-          console.log(`Found ${headers.length} potential skill headers`);
           const header = headers.find((el) =>
             el.textContent.includes(headerText)
           );
           if (header) {
-            console.log(`Found header: ${headerText}`);
             const skillsElement = header.nextElementSibling;
             if (
               skillsElement &&
@@ -551,28 +295,19 @@ const scrapeLinkedInJobs = async (query, options) => {
         skillsData.onProfile = extractSkills("skills on your profile");
         skillsData.missing = extractSkills("skills missing on your profile");
 
-        console.log("Detailed skills data:", skillsData);
         return skillsData;
       };
 
-      // Method 2: Try to get general skills list
       const getGeneralSkills = () => {
         const generalSkills = document.querySelector(
           ".job-details-jobs-unified-top-card__job-insight-text-button"
         );
         if (generalSkills) {
-          console.log("Found general skills element");
           const skillsText = generalSkills.textContent.trim();
           const match = skillsText.match(/Skills: (.+?)(?:, \+(\d+) more)?$/);
           if (match) {
             const listedSkills = match[1].split(", ");
             const additional = match[2] ? parseInt(match[2]) : 0;
-            console.log(
-              "General skills:",
-              listedSkills,
-              "Additional:",
-              additional
-            );
             return { general: listedSkills, additional };
           }
         }
@@ -592,7 +327,6 @@ const scrapeLinkedInJobs = async (query, options) => {
         return generalSkills;
       }
 
-      console.log("No skills found");
       return "Not Specified";
     };
 

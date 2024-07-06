@@ -31,8 +31,21 @@ router.post("/scrape", async (req, res) => {
 // get all jobs
 router.get("/getjobs", async (req, res) => {
   try {
-    const jobs = await Job.find();
-    res.status(200).json(jobs);
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    const jobs = await Job.find().skip(skip).limit(limit);
+    const totalJobs = await Job.countDocuments();
+    const totalPages = Math.ceil(totalJobs / limit);
+
+    res.status(200).json({
+      jobs,
+      currentPage: page,
+      totalPages,
+      totalJobs,
+      itemsPerPage: limit,
+    });
   } catch (error) {
     console.error("Error fetching jobs:", error);
     res.status(500).json({ error: "An error occurred while fetching jobs" });
