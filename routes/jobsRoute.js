@@ -51,6 +51,56 @@ router.get("/getjobs", async (req, res) => {
     res.status(500).json({ error: "An error occurred while fetching jobs" });
   }
 });
+// featured jobs for user
+router.get("/featuredjobs", async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+    const userId = req.query.userId; // Assuming you pass the user ID as a query parameter
+
+    // Fetch the user's skills
+    const user = await User.findById(userId);
+    const userSkills = user
+      ? user.skills.map((skill) => skill.toLowerCase())
+      : [];
+
+    // Fetch all jobs
+    const jobs = await Job.find().lean();
+
+    // Calculate relevance score for each job
+    const scoredJobs = jobs.map((job) => {
+      const jobSkills = job.skills.map((skill) => skill.toLowerCase());
+      const matchingSkills = jobSkills.filter((skill) =>
+        userSkills.includes(skill)
+      );
+      const relevanceScore = matchingSkills.length / jobSkills.length;
+      return { ...job, relevanceScore };
+    });
+
+    // Sort jobs by relevance score
+    scoredJobs.sort((a, b) => b.relevanceScore - a.relevanceScore);
+
+    // Paginate the results
+    const paginatedJobs = scoredJobs.slice(skip, skip + limit);
+
+    const totalJobs = jobs.length;
+    const totalPages = Math.ceil(totalJobs / limit);
+
+    res.status(200).json({
+      jobs: paginatedJobs,
+      currentPage: page,
+      totalPages,
+      totalJobs,
+      itemsPerPage: limit,
+    });
+  } catch (error) {
+    console.error("Error fetching jobs:", error);
+    res
+      .status(500)
+      .json({ error: "An error occurred while fetching featured jobs" });
+  }
+});
 
 // get job based on id
 router.get("/getjobs/:id", async (req, res) => {
@@ -63,6 +113,16 @@ router.get("/getjobs/:id", async (req, res) => {
   } catch (error) {
     console.error("Error fetching job:", error);
     res.status(500).json({ error: "An error occurred while fetching the job" });
+  }
+});
+
+// delete all jobs
+router.delete("/deleteAllJobs", async (req, res) => {
+  try {
+    const result = await Job.deleteMany({});
+    res.json({ message: `Deleted ${result.deletedCount} jobs` });
+  } catch (error) {
+    res.status(500).json({ error: "An error occurred while deleting jobs" });
   }
 });
 

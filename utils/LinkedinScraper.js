@@ -112,6 +112,30 @@ const scrapeLinkedInJobs = async (query, options) => {
     return { salary, jobType, locationType, employees };
   };
 
+  const cleanAndProcessSkills = (skillsData) => {
+    if (!skillsData || skillsData === "Not Specified") {
+      return [];
+    }
+
+    let skills = [];
+    if (typeof skillsData === "object") {
+      const skillsOnProfile = Array.isArray(skillsData.onProfile)
+        ? skillsData.onProfile
+        : [];
+      const skillsMissing = Array.isArray(skillsData.missing)
+        ? skillsData.missing
+        : [];
+      skills = [...skillsOnProfile, ...skillsMissing];
+    } else if (typeof skillsData === "string") {
+      skills = skillsData.split(",").map((skill) => skill.trim());
+    }
+
+    // Remove duplicates and empty strings
+    skills = [...new Set(skills)].filter((skill) => skill.length > 0);
+
+    return skills;
+  };
+
   scraper.on(events.scraper.data, async (data) => {
     console.log("Raw data:", JSON.stringify(data, null, 2));
 
@@ -138,12 +162,24 @@ const scrapeLinkedInJobs = async (query, options) => {
       parsedDescription.jobInfo || ""
     );
 
+    // Process skills
     let skills = parsedDescription.skills || "Not Specified";
     if (skills !== "Not Specified") {
-      const combinedSkills = [...skills.onProfile, ...skills.missing].join(
-        ", "
+      if (typeof skills === "object" && skills.onProfile && skills.missing) {
+        const combinedSkills = [...skills.onProfile, ...skills.missing].join(
+          ", "
+        );
+        skills = cleanAndProcessSkills(combinedSkills);
+      } else if (typeof skills === "object" && skills.general) {
+        skills = cleanAndProcessSkills(skills.general.join(", "));
+      } else {
+        skills = cleanAndProcessSkills(skills);
+      }
+    } else {
+      // If no skills were found, try to extract from description
+      skills = extractSkillsFromDescription(
+        parsedDescription.description || ""
       );
-      skills = combinedSkills;
     }
 
     const job = {
@@ -265,8 +301,6 @@ const scrapeLinkedInJobs = async (query, options) => {
     };
 
     const getSkills = () => {
-      console.log("Starting skills extraction");
-
       const getDetailedSkills = () => {
         const skillsData = {
           onProfile: [],
