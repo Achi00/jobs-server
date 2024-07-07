@@ -58,7 +58,7 @@ router.get("/featuredjobs", async (req, res) => {
     const limit = parseInt(req.query.limit) || 20;
     const skip = (page - 1) * limit;
     const userId = req.query.userId; // Assuming you pass the user ID as a query parameter
-
+    console.log("userId:", userId);
     // Fetch the user's skills
     const user = await User.findById(userId);
     const userSkills = user
@@ -68,13 +68,24 @@ router.get("/featuredjobs", async (req, res) => {
     // Fetch all jobs
     const jobs = await Job.find().lean();
 
-    // Calculate relevance score for each job
+    // Ensure skills field is an array and map skills to lowercase
     const scoredJobs = jobs.map((job) => {
-      const jobSkills = job.skills.map((skill) => skill.toLowerCase());
+      const jobSkills = Array.isArray(job.skills)
+        ? job.skills.map((skill) => skill.toLowerCase())
+        : [];
       const matchingSkills = jobSkills.filter((skill) =>
         userSkills.includes(skill)
       );
-      const relevanceScore = matchingSkills.length / jobSkills.length;
+
+      // console.log(`Job Title: ${job.jobTitle}`);
+      // console.log(`Job Skills: ${jobSkills}`);
+      // console.log(`User Skills: ${userSkills}`);
+      // console.log(`Matching Skills: ${matchingSkills}`);
+
+      const relevanceScore = jobSkills.length
+        ? matchingSkills.length / jobSkills.length
+        : 0;
+
       return { ...job, relevanceScore };
     });
 
@@ -95,7 +106,7 @@ router.get("/featuredjobs", async (req, res) => {
       itemsPerPage: limit,
     });
   } catch (error) {
-    console.error("Error fetching jobs:", error);
+    console.error("Error fetching jobs:", error.message);
     res
       .status(500)
       .json({ error: "An error occurred while fetching featured jobs" });

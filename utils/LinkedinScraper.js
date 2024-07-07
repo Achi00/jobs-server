@@ -136,6 +136,71 @@ const scrapeLinkedInJobs = async (query, options) => {
     return skills;
   };
 
+  const extractSkillsFromDescription = (description) => {
+    // List of common technical skills (expand this list as needed)
+    const commonSkills = [
+      "JavaScript",
+      "Python",
+      "Java",
+      "C++",
+      "React",
+      "Node.js",
+      "SQL",
+      "Machine Learning",
+      "Data Analysis",
+      "AWS",
+      "Docker",
+      "Kubernetes",
+      "Git",
+      "Agile",
+      "Scrum",
+      "DevOps",
+      "CI/CD",
+      "REST API",
+      "GraphQL",
+      "MongoDB",
+      "PostgreSQL",
+      "TensorFlow",
+      "PyTorch",
+      "Vue.js",
+      "Angular",
+      "TypeScript",
+      "Go",
+      "Ruby",
+      "PHP",
+      "Swift",
+      "Kotlin",
+      "R",
+      "Scala",
+      "Hadoop",
+      "Spark",
+      "Tableau",
+      "Power BI",
+      "Excel",
+      "Kubernetes",
+      "Terraform",
+      "Ansible",
+      "Jenkins",
+      "Unity",
+      "Unreal Engine",
+      "Photoshop",
+      "Illustrator",
+      "Figma",
+      "Sketch",
+    ];
+
+    const skills = new Set();
+    const words = description.split(/\W+/);
+
+    words.forEach((word) => {
+      if (commonSkills.includes(word)) {
+        skills.add(word);
+      }
+    });
+
+    return Array.from(skills);
+  };
+
   scraper.on(events.scraper.data, async (data) => {
     console.log("Raw data:", JSON.stringify(data, null, 2));
 
