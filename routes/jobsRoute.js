@@ -4,6 +4,9 @@ const User = require("../models/User");
 const axios = require("axios");
 const scrapeLinkedInJobs = require("../utils/LinkedinScraper");
 const Job = require("../models/Jobs");
+const natural = require("natural");
+const tokenizer = new natural.WordTokenizer();
+const TfIdf = natural.TfIdf;
 
 const router = express.Router();
 
@@ -57,34 +60,72 @@ router.get("/featuredjobs", async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
     const skip = (page - 1) * limit;
-    const userId = req.query.userId; // Assuming you pass the user ID as a query parameter
-    console.log("userId:", userId);
-    // Fetch the user's skills
+    const userId = req.query.userId;
+
     const user = await User.findById(userId);
-    const userSkills = user
-      ? user.skills.map((skill) => skill.toLowerCase())
-      : [];
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const userSkills = user.skills.map((skill) => skill.toLowerCase());
+    const userExperience = user.experience.map((exp) =>
+      exp.title.toLowerCase()
+    );
 
     // Fetch all jobs
     const jobs = await Job.find().lean();
 
-    // Ensure skills field is an array and map skills to lowercase
-    const scoredJobs = jobs.map((job) => {
+    const tfidf = new TfIdf();
+
+    // Add all job descriptions, experiences, and knowledge to the corpus
+    jobs.forEach((job, index) => {
+      const jobText = `${job.jobTitle} ${
+        job.descriptionHTML
+      } ${job.experiences.join(" ")} ${job.knowledge.join(" ")}`;
+      tfidf.addDocument(jobText.toLowerCase());
+    });
+
+    const scoredJobs = jobs.map((job, index) => {
+      let relevanceScore = 0;
+
+      // Skill matching
       const jobSkills = Array.isArray(job.skills)
         ? job.skills.map((skill) => skill.toLowerCase())
         : [];
-      const matchingSkills = jobSkills.filter((skill) =>
-        userSkills.includes(skill)
-      );
+      jobSkills.forEach((jobSkill) => {
+        const bestMatch = Math.max(
+          ...userSkills.map((userSkill) =>
+            natural.JaroWinklerDistance(jobSkill, userSkill)
+          )
+        );
+        if (bestMatch > 0.8) {
+          relevanceScore += bestMatch;
+        }
+      });
 
-      // console.log(`Job Title: ${job.jobTitle}`);
-      // console.log(`Job Skills: ${jobSkills}`);
-      // console.log(`User Skills: ${userSkills}`);
-      // console.log(`Matching Skills: ${matchingSkills}`);
+      // Job title matching with skills
+      const jobTitleTokens = tokenizer.tokenize(job.jobTitle.toLowerCase());
+      jobTitleTokens.forEach((token) => {
+        if (userSkills.includes(token)) {
+          relevanceScore += 0.5; // Add half a point for each matching word in the title
+        }
+      });
 
-      const relevanceScore = jobSkills.length
-        ? matchingSkills.length / jobSkills.length
-        : 0;
+      // Experience and Knowledge matching using TF-IDF
+      const jobText = `${job.jobTitle} ${
+        job.descriptionHTML
+      } ${job.experiences.join(" ")} ${job.knowledge.join(" ")}`.toLowerCase();
+      const jobTokens = tokenizer.tokenize(jobText);
+
+      userSkills.concat(userExperience).forEach((term) => {
+        relevanceScore += tfidf.tfidf(term, index);
+      });
+
+      // Normalize the score
+      // We add jobTitleTokens.length to account for the potential title matches
+      const maxPossibleScore =
+        userSkills.length + userExperience.length + jobTitleTokens.length * 0.5;
+      relevanceScore = relevanceScore / maxPossibleScore;
 
       return { ...job, relevanceScore };
     });

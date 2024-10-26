@@ -13,6 +13,13 @@ const {
 } = require("linkedin-jobs-scraper");
 const Job = require("../models/Jobs");
 const cheerio = require("cheerio");
+const axios = require("axios");
+const {
+  extractInsights,
+  extractSkillsFromDescription,
+  cleanAndProcessSkills,
+  cleanJobObject,
+} = require("../helpers");
 
 const scrapeLinkedInJobs = async (query, options) => {
   const scraper = new LinkedinScraper({
@@ -21,189 +28,7 @@ const scrapeLinkedInJobs = async (query, options) => {
     args: ["--lang=en-GB"],
   });
 
-  const cleanJobObject = (job) => {
-    const cleanedJob = {};
-    for (const [key, value] of Object.entries(job)) {
-      if (value && value !== "Not Specified" && value.length > 0) {
-        cleanedJob[key] = value;
-      }
-    }
-    return cleanedJob;
-  };
-
-  const extractInsights = (insights, jobInfo) => {
-    let salary = "Not Specified";
-    let jobType = "Not Specified";
-    let locationType = "Not Specified";
-    let employees = "Not Specified";
-
-    insights.forEach((insight) => {
-      let matches = insight.match(
-        /\$[\d,.]+(?:K)?\/(?:yr|hr)\s*-\s*\$[\d,.]+(?:K)?\/(?:yr|hr)/
-      );
-      if (matches) {
-        salary = matches[0];
-      } else {
-        matches = insight.match(/\$[\d,.]+(?:K)?\/(?:yr|hr)/);
-        if (matches) {
-          salary = matches[0];
-        }
-      }
-
-      if (insight.includes("Full-time")) {
-        jobType = "Full-time";
-      } else if (insight.includes("Part-time")) {
-        jobType = "Part-time";
-      } else if (insight.includes("Contract")) {
-        jobType = "Contract";
-      }
-
-      if (insight.includes("Remote")) {
-        locationType = "Remote";
-      } else if (insight.includes("On-site")) {
-        locationType = "On-site";
-      } else if (insight.includes("Hybrid")) {
-        locationType = "Hybrid";
-      }
-
-      matches = insight.match(
-        /(\d{1,3}(?:,\d{3})*(?:\+)?)\s*-\s*(\d{1,3}(?:,\d{3})*(?:\+)?)\s*employees/
-      );
-      if (matches) {
-        employees = `${matches[1]} - ${matches[2]} employees`;
-      } else {
-        matches = insight.match(/(\d{1,3}(?:,\d{3})*(?:\+)?)\s*employees/);
-        if (matches) {
-          employees = `${matches[1]} employees`;
-        }
-      }
-    });
-
-    if (employees === "Not Specified" && jobInfo) {
-      const matches = jobInfo.match(
-        /(\d{1,3}(?:,\d{3})*(?:\+)?)\s*-\s*(\d{1,3}(?:,\d{3})*(?:\+)?)\s*employees/
-      );
-      if (matches) {
-        employees = `${matches[1]} - ${matches[2]} employees`;
-      } else {
-        const singleMatch = jobInfo.match(
-          /(\d{1,3}(?:,\d{3})*(?:\+)?)\s*employees/
-        );
-        if (singleMatch) {
-          employees = `${singleMatch[1]} employees`;
-        }
-      }
-    }
-
-    if (salary === "Not Specified" && jobInfo) {
-      const salaryMatches = jobInfo.match(
-        /\$[\d,.]+(?:K)?\/(?:yr|hr)\s*-\s*\$[\d,.]+(?:K)?\/(?:yr|hr)/
-      );
-      if (salaryMatches) {
-        salary = salaryMatches[0];
-      } else {
-        const singleSalaryMatch = jobInfo.match(/\$[\d,.]+(?:K)?\/(?:yr|hr)/);
-        if (singleSalaryMatch) {
-          salary = singleSalaryMatch[0];
-        }
-      }
-    }
-
-    return { salary, jobType, locationType, employees };
-  };
-
-  const cleanAndProcessSkills = (skillsData) => {
-    if (!skillsData || skillsData === "Not Specified") {
-      return [];
-    }
-
-    let skills = [];
-    if (typeof skillsData === "object") {
-      const skillsOnProfile = Array.isArray(skillsData.onProfile)
-        ? skillsData.onProfile
-        : [];
-      const skillsMissing = Array.isArray(skillsData.missing)
-        ? skillsData.missing
-        : [];
-      skills = [...skillsOnProfile, ...skillsMissing];
-    } else if (typeof skillsData === "string") {
-      skills = skillsData.split(",").map((skill) => skill.trim());
-    }
-
-    // Remove duplicates and empty strings
-    skills = [...new Set(skills)].filter((skill) => skill.length > 0);
-
-    return skills;
-  };
-
-  const extractSkillsFromDescription = (description) => {
-    // List of common technical skills (expand this list as needed)
-    const commonSkills = [
-      "JavaScript",
-      "Python",
-      "Java",
-      "C++",
-      "React",
-      "Node.js",
-      "SQL",
-      "Machine Learning",
-      "Data Analysis",
-      "AWS",
-      "Docker",
-      "Kubernetes",
-      "Git",
-      "Agile",
-      "Scrum",
-      "DevOps",
-      "CI/CD",
-      "REST API",
-      "GraphQL",
-      "MongoDB",
-      "PostgreSQL",
-      "TensorFlow",
-      "PyTorch",
-      "Vue.js",
-      "Angular",
-      "TypeScript",
-      "Go",
-      "Ruby",
-      "PHP",
-      "Swift",
-      "Kotlin",
-      "R",
-      "Scala",
-      "Hadoop",
-      "Spark",
-      "Tableau",
-      "Power BI",
-      "Excel",
-      "Kubernetes",
-      "Terraform",
-      "Ansible",
-      "Jenkins",
-      "Unity",
-      "Unreal Engine",
-      "Photoshop",
-      "Illustrator",
-      "Figma",
-      "Sketch",
-    ];
-
-    const skills = new Set();
-    const words = description.split(/\W+/);
-
-    words.forEach((word) => {
-      if (commonSkills.includes(word)) {
-        skills.add(word);
-      }
-    });
-
-    return Array.from(skills);
-  };
-
   scraper.on(events.scraper.data, async (data) => {
-    console.log("Raw data:", JSON.stringify(data, null, 2));
-
     let parsedDescription;
     try {
       parsedDescription = JSON.parse(data.description);
@@ -211,6 +36,14 @@ const scrapeLinkedInJobs = async (query, options) => {
       console.error("Error parsing description:", error);
       parsedDescription = {};
     }
+
+    const otherData = parsedDescription.otherData;
+    const unfilteredJobDetailPreferences =
+      parsedDescription.jobDetailPreferences.text;
+    const jobDetailPreferences = "";
+
+    console.log("otherData:", otherData);
+    console.log("jobDetailPreferences:", jobDetailPreferences);
 
     // Validate and parse date
     let date = new Date(data.date);
@@ -247,6 +80,21 @@ const scrapeLinkedInJobs = async (query, options) => {
       );
     }
 
+    let experiences = [];
+    let knowledge = [];
+    try {
+      const response = await axios.post(
+        "http://127.0.0.1:5000/extract_experience",
+        {
+          text: cleanDescriptionHTML,
+        }
+      );
+      experiences = response.data.experiences;
+      knowledge = response.data.knowledge;
+    } catch (error) {
+      console.error("Error extracting experiences and knowledge:", error);
+    }
+
     const job = {
       jobId: data.jobId,
       company: data.company || "Not Specified",
@@ -259,22 +107,22 @@ const scrapeLinkedInJobs = async (query, options) => {
       description: parsedDescription.description || "Not Specified",
       descriptionHTML: cleanDescriptionHTML,
       skills: skills,
+      jobDetailPreferences: jobDetailPreferences,
       jobInfo: parsedDescription.jobInfo || "Not Specified",
       salary: insights.salary,
       jobType: insights.jobType,
       locationType: insights.locationType,
       employees: insights.employees,
+      experiences: experiences,
+      knowledge: knowledge,
+      otherData,
     };
-
-    console.log("Processed job data:", JSON.stringify(job, null, 2));
 
     try {
       const cleanedJob = cleanJobObject(job);
       await Job.findOneAndUpdate({ jobId: data.jobId }, cleanedJob, {
         upsert: true,
       });
-      console.log(`Saved job: ${job.jobTitle}`);
-      console.log(`Employees: ${job.employees}`);
     } catch (error) {
       console.error("Error saving job:", error);
     }
@@ -433,6 +281,11 @@ const scrapeLinkedInJobs = async (query, options) => {
     const jobTitle = getText(
       ".t-24.job-details-jobs-unified-top-card__job-title h1"
     );
+    const otherData = getText(
+      ".job-details-jobs-unified-top-card__primary-description-container .t-black--light"
+    );
+    const jobDetailPreferences = getText(".job-details-preferences-and-skills");
+
     const location = getText(".t-black--light.mt2 span:first-child");
     const salary = getText(
       ".jobs-unified-top-card__job-insight--highlight span"
@@ -456,8 +309,10 @@ const scrapeLinkedInJobs = async (query, options) => {
       jobType: jobType.text,
       descriptionHTML: descriptionHTML,
       skills: skills,
+      jobDetailPreferences,
       insights,
       jobInfo,
+      otherData: otherData.text, //test variable
       fullHTML: document.documentElement.outerHTML, // Save full HTML for debugging
       _debug: {
         selectors: {

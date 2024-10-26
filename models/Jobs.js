@@ -5,7 +5,9 @@ const jobSchema = new mongoose.Schema({
   jobId: { type: String, required: true, unique: true },
   company: String,
   location: String,
+  otherData: String,
   date: Date,
+  jobDetailPreferences: String,
   link: String,
   applyLink: String,
   companyLogo: String,
@@ -18,6 +20,9 @@ const jobSchema = new mongoose.Schema({
   jobType: String,
   locationType: String,
   employees: String,
+  experiences: { type: [String] },
+  knowledge: { type: [String] },
+  relevanceScore: { type: Number },
 });
 
 module.exports = mongoose.model("Job", jobSchema);

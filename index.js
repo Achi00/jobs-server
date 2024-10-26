@@ -73,7 +73,7 @@ app.listen(PORT, () => {
 //   try {
 //     await scrapeLinkedInJobs("Engineer", {
 //       locations: ["United States"],
-//       limit: 20, // Set the desired limit here
+//       limit: 20
 //     });
 //   } catch (error) {
 //     console.error("Error running scheduled job scraping task:", error);
