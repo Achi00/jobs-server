@@ -19,6 +19,7 @@ const {
   extractSkillsFromDescription,
   cleanAndProcessSkills,
   cleanJobObject,
+  formatJobDescription,
 } = require("../helpers");
 
 const scrapeLinkedInJobs = async (query, options) => {
@@ -37,13 +38,14 @@ const scrapeLinkedInJobs = async (query, options) => {
       parsedDescription = {};
     }
 
+    // filter job details
     const otherData = parsedDescription.otherData;
+    const filteredOtherData = otherData.replace(/·/g, ",");
     const unfilteredJobDetailPreferences =
       parsedDescription.jobDetailPreferences.text;
-    const jobDetailPreferences = "";
-
-    console.log("otherData:", otherData);
-    console.log("jobDetailPreferences:", jobDetailPreferences);
+    const jobDetailPreferences = await formatJobDescription(
+      unfilteredJobDetailPreferences
+    );
 
     // Validate and parse date
     let date = new Date(data.date);
@@ -60,7 +62,7 @@ const scrapeLinkedInJobs = async (query, options) => {
       parsedDescription.jobInfo || ""
     );
 
-    // Process skills
+    // Process job skills
     let skills = parsedDescription.skills || "Not Specified";
     if (skills !== "Not Specified") {
       if (typeof skills === "object" && skills.onProfile && skills.missing) {
@@ -80,6 +82,7 @@ const scrapeLinkedInJobs = async (query, options) => {
       );
     }
 
+    // python api to extract experience from html content
     let experiences = [];
     let knowledge = [];
     try {
@@ -95,6 +98,7 @@ const scrapeLinkedInJobs = async (query, options) => {
       console.error("Error extracting experiences and knowledge:", error);
     }
 
+    // for mongodb schema, complete data
     const job = {
       jobId: data.jobId,
       company: data.company || "Not Specified",
@@ -115,7 +119,7 @@ const scrapeLinkedInJobs = async (query, options) => {
       employees: insights.employees,
       experiences: experiences,
       knowledge: knowledge,
-      otherData,
+      filteredOtherData,
     };
 
     try {

@@ -178,12 +178,13 @@ const extractSkillsFromDescription = (description) => {
   return Array.from(skills);
 };
 
-function formatJobDescription(description) {
+async function formatJobDescription(description) {
   // Step 1: Remove all instances of "Matches your job preferences"
   let result = description.replace(/Matches your job preferences,/g, "");
 
-  // Step 2: Remove text between the comma and the dot
-  result = result.replace(/, [^\.]+\./g, ",");
+  // Step 2: Remove "workplace type" and "job type" with any text after until the comma or dot
+  result = result.replace(/workplace type[^,\.]*[,.]/gi, ",");
+  result = result.replace(/job type[^,\.]*[,.]/gi, ",");
 
   // Step 3: Replace all periods with commas
   result = result.replace(/\./g, ",");
