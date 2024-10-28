@@ -37,9 +37,15 @@ router.get("/getjobs", async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
     const skip = (page - 1) * limit;
+    const searchTerm = req.query.search || "";
 
-    const jobs = await Job.find().skip(skip).limit(limit);
-    const totalJobs = await Job.countDocuments();
+    // Define the search criteria
+    const searchCriteria = searchTerm
+      ? { jobTitle: { $regex: searchTerm, $options: "i" } } // case-insensitive search
+      : {};
+
+    const jobs = await Job.find(searchCriteria).skip(skip).limit(limit);
+    const totalJobs = await Job.countDocuments(searchCriteria);
     const totalPages = Math.ceil(totalJobs / limit);
 
     res.status(200).json({

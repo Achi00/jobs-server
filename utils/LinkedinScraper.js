@@ -40,7 +40,9 @@ const scrapeLinkedInJobs = async (query, options) => {
 
     // filter job details
     const otherData = parsedDescription.otherData;
+    // remove · and change with comma
     const filteredOtherData = otherData.replace(/·/g, ",");
+    // remove linkedin profile related texts and seperate with comma
     const unfilteredJobDetailPreferences =
       parsedDescription.jobDetailPreferences.text;
     const jobDetailPreferences = await formatJobDescription(
