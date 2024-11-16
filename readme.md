@@ -1,4 +1,4 @@
-# Job Server Application
+# Linkedin Web Scraper
 
 ## Description
 
